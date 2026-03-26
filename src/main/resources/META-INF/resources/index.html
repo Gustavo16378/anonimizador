@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>Anonimizador de PDF</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Arial, sans-serif; max-width: 700px; margin: 40px auto; background: #f0f4f8; color: #333; }
+        h1 { text-align: center; color: #1a5276; margin-bottom: 8px; font-size: 28px; }
+        .subtitle { text-align: center; color: #7f8c8d; font-size: 14px; margin-bottom: 24px; }
+        .drop-zone {
+            border: 3px dashed #3498db; border-radius: 16px; text-align: center;
+            padding: 40px 20px; color: #7f8c8d; cursor: pointer; margin-bottom: 20px;
+            background: #fff; transition: all 0.3s;
+        }
+        .drop-zone:hover { border-color: #2980b9; background: #ebf5fb; }
+        .drop-zone.dragover { border-color: #27ae60; background: #eafaf1; color: #27ae60; }
+        .drop-zone .icon { font-size: 48px; margin-bottom: 10px; }
+        .file-info { text-align: center; margin-bottom: 12px; font-weight: bold; color: #2c3e50; }
+        .preview-container {
+            display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px;
+        }
+        .preview-box {
+            border: 1px solid #ddd; border-radius: 10px; padding: 10px; background: #fff;
+            text-align: center; max-width: 300px;
+        }
+        .preview-box h3 { font-size: 14px; color: #555; margin: 0 0 8px 0; }
+        .preview-box canvas, .preview-box img { max-width: 260px; max-height: 360px; border-radius: 6px; }
+        .row { margin-bottom: 14px; }
+        .row label { display: block; margin-bottom: 6px; font-weight: bold; color: #2c3e50; }
+        .row input[type="text"] {
+            padding: 8px 12px; font-size: 16px; width: 100%; border: 2px solid #bdc3c7;
+            border-radius: 8px; outline: none; transition: border 0.3s;
+        }
+        .row input[type="text"]:focus { border-color: #3498db; }
+        .btn-primary {
+            background: #2980b9; color: white; border: none; border-radius: 8px;
+            padding: 12px 32px; font-size: 18px; cursor: pointer; display: block;
+            margin: 10px auto; transition: background 0.3s;
+        }
+        .btn-primary:hover { background: #1a6da0; }
+        .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .btn-success {
+            background: #27ae60; color: white; border: none; border-radius: 8px;
+            padding: 12px 32px; font-size: 18px; cursor: pointer; display: block;
+            margin: 10px auto; text-decoration: none; transition: background 0.3s;
+        }
+        .btn-success:hover { background: #1e8449; }
+        #downloadSection { display: none; text-align: center; margin-top: 16px; }
+        .footer { text-align: center; font-size: 12px; color: #bbb; margin-top: 30px; }
+        .spinner { display: none; text-align: center; margin: 16px 0; }
+        .spinner::after {
+            content: ''; display: inline-block; width: 32px; height: 32px;
+            border: 4px solid #bdc3c7; border-top: 4px solid #2980b9;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <h1>🔒 Anonimizador de PDF</h1>
+    <p class="subtitle">Arraste ou selecione um PDF para anonimizar dados sensíveis</p>
+
+    <div class="drop-zone" id="dropZone">
+        <div class="icon">📄</div>
+        <div>Arraste o PDF aqui ou clique para selecionar</div>
+    </div>
+    <input type="file" id="selectFile" accept="application/pdf" style="display:none;">
+
+    <div class="file-info" id="fileInfo"></div>
+
+    <div class="preview-container" id="previewContainer">
+        <div class="preview-box" id="originalPreview" style="display:none;">
+            <h3>📋 Original</h3>
+            <canvas id="originalCanvas"></canvas>
+        </div>
+        <div class="preview-box" id="anonPreview" style="display:none;">
+            <h3>🔒 Anonimizado</h3>
+            <canvas id="anonCanvas"></canvas>
+        </div>
+    </div>
+
+    <div class="row">
+        <label for="outputName">Nome do arquivo de saída:</label>
+        <input type="text" id="outputName" value="anonimizado.pdf" placeholder="anonimizado.pdf">
+    </div>
+
+    <button class="btn-primary" id="sendBtn" disabled>🔒 Anonimizar</button>
+    <div class="spinner" id="spinner"></div>
+
+    <div id="downloadSection">
+        <a id="downloadLink" class="btn-success">⬇️ Baixar PDF Anonimizado</a>
+    </div>
+
+    <div class="footer">Desenvolvido com Quarkus e PDFBox • Processamento 100% local</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.9.179/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.9.179/pdf.worker.min.js';
+
+const dropZone = document.getElementById('dropZone');
+const selectFile = document.getElementById('selectFile');
+const sendBtn = document.getElementById('sendBtn');
+const fileInfo = document.getElementById('fileInfo');
+const outputName = document.getElementById('outputName');
+const spinner = document.getElementById('spinner');
+const downloadSection = document.getElementById('downloadSection');
+const downloadLink = document.getElementById('downloadLink');
+const originalPreview = document.getElementById('originalPreview');
+const anonPreview = document.getElementById('anonPreview');
+let selectedFile = null;
+
+function renderPdfPreview(data, canvasId) {
+    return pdfjsLib.getDocument(data).promise.then(pdf => {
+        return pdf.getPage(1).then(page => {
+            const scale = 1.5;
+            const viewport = page.getViewport({ scale });
+            const canvas = document.getElementById(canvasId);
+            const ctx = canvas.getContext('2d');
+            canvas.width = viewport.width;
+            canvas.height = viewport.height;
+            return page.render({ canvasContext: ctx, viewport }).promise;
+        });
+    });
+}
+
+function showOriginalPreview(file) {
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+        renderPdfPreview({ data: new Uint8Array(evt.target.result) }, 'originalCanvas').then(() => {
+            originalPreview.style.display = 'block';
+        });
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+dropZone.onclick = () => selectFile.click();
+dropZone.ondragover = (e) => { e.preventDefault(); dropZone.classList.add('dragover'); };
+dropZone.ondragleave = () => dropZone.classList.remove('dragover');
+dropZone.ondrop = (e) => {
+    e.preventDefault(); dropZone.classList.remove('dragover');
+    if (e.dataTransfer.files.length) {
+        selectedFile = e.dataTransfer.files[0];
+        fileInfo.innerText = '📎 ' + selectedFile.name;
+        sendBtn.disabled = false;
+        anonPreview.style.display = 'none';
+        downloadSection.style.display = 'none';
+        showOriginalPreview(selectedFile);
+    }
+};
+selectFile.onchange = (e) => {
+    if (e.target.files.length) {
+        selectedFile = e.target.files[0];
+        fileInfo.innerText = '📎 ' + selectedFile.name;
+        sendBtn.disabled = false;
+        anonPreview.style.display = 'none';
+        downloadSection.style.display = 'none';
+        showOriginalPreview(selectedFile);
+    }
+};
+
+sendBtn.onclick = async () => {
+    sendBtn.disabled = true;
+    spinner.style.display = 'block';
+    fileInfo.innerText = '⏳ Processando... Aguarde.';
+    downloadSection.style.display = 'none';
+    anonPreview.style.display = 'none';
+
+    try {
+        const resp = await fetch('/anonimizador/redact?safe=true', {
+            method: 'POST',
+            body: selectedFile,
+            headers: { 'Content-Type': 'application/pdf' }
+        });
+
+        if (resp.ok) {
+            const blob = await resp.blob();
+            const url = URL.createObjectURL(blob);
+
+            // Preview do anonimizado
+            const arrayBuf = await blob.arrayBuffer();
+            renderPdfPreview({ data: new Uint8Array(arrayBuf) }, 'anonCanvas').then(() => {
+                anonPreview.style.display = 'block';
+            });
+
+            // Botão de download
+            const fileName = outputName.value.trim() || 'anonimizado.pdf';
+            downloadLink.href = url;
+            downloadLink.download = fileName;
+            downloadLink.innerText = '⬇️ Baixar: ' + fileName;
+            downloadSection.style.display = 'block';
+            fileInfo.innerText = '✅ Pronto! Confira a prévia e baixe o arquivo.';
+        } else {
+            const errText = await resp.text();
+            fileInfo.innerText = '❌ Erro: ' + errText;
+        }
+    } catch (err) {
+        fileInfo.innerText = '❌ Erro de conexão: ' + err.message;
+    }
+
+    spinner.style.display = 'none';
+    sendBtn.disabled = false;
+};
+</script>
+</body>
+</html>
