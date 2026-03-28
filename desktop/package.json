@@ -1,0 +1,78 @@
+{
+  "name": "anonimizador-pdf",
+  "version": "1.0.0",
+  "description": "Aplicativo desktop para anonimização de documentos PDF",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux",
+    "build-backend": "cd .. && ./mvnw package -DskipTests -Dquarkus.package.jar.type=uber-jar"
+  },
+  "keywords": [
+    "pdf",
+    "anonimizador",
+    "desktop"
+  ],
+  "author": "Gustavo",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^36.9.5",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.anonimizador.pdf",
+    "productName": "Anonimizador PDF",
+    "copyright": "Copyright © 2025",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "assets/**",
+      "backend/**"
+    ],
+    "extraResources": [
+      {
+        "from": "../target",
+        "to": "backend",
+        "filter": [
+          "*-runner.jar"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.productivity"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Office"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}

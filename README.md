@@ -1,5 +1,59 @@
 # anonimizador-pdf
 
+Aplicativo desktop para anonimização de documentos PDF brasileiros (CPF, CNPJ, RG, endereços, etc.).  
+Roda 100% localmente — nenhum dado é enviado à internet.
+
+---
+
+## 🖥️ Aplicativo Desktop (modo recomendado)
+
+### Pré-requisitos
+
+- **Java 21+** instalado e no PATH
+- **Node.js 18+** e npm instalados
+- **Maven** (ou use o `./mvnw` incluído no projeto)
+
+### Build e execução em um comando
+
+```bash
+./build-desktop.sh
+```
+
+Esse script:
+1. Compila o backend Java como JAR executável (`target/*-runner.jar`)
+2. Instala as dependências do Electron (`desktop/node_modules`)
+3. Gera o instalador do app em `desktop/dist/`
+
+> No **Windows**, execute via Git Bash ou WSL. Como alternativa, siga os passos manuais abaixo.
+
+### Passos manuais
+
+```bash
+# 1. Compilar o backend
+./mvnw package -DskipTests -Dquarkus.package.jar.type=uber-jar
+
+# 2. Entrar na pasta do app desktop
+cd desktop
+
+# 3. Instalar dependências do Electron (só na primeira vez)
+npm install
+
+# 4a. Rodar em modo desenvolvimento (sem gerar instalador)
+npm start
+
+# 4b. Gerar instalador para distribuição
+npm run dist          # detecta o SO automaticamente
+npm run dist:win      # Windows (.exe)
+npm run dist:mac      # macOS (.dmg)
+npm run dist:linux    # Linux (.AppImage / .deb)
+```
+
+O instalador gerado fica em `desktop/dist/`.
+
+---
+
+## 🔌 API REST (modo servidor)
+
 This project uses Quarkus, the Supersonic Subatomic Java Framework.
 
 If you want to learn more about Quarkus, please visit its website: <https://quarkus.io/>.
