@@ -42,6 +42,7 @@ nb-configuration.xml
 # Desktop app — build artifacts
 desktop/node_modules/
 desktop/dist/
+desktop/jre/
 
 # Plugin directory
 /.quarkus/cli/plugins/

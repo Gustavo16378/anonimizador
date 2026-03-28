@@ -45,6 +45,10 @@
         "filter": [
           "*-runner.jar"
         ]
+      },
+      {
+        "from": "jre",
+        "to": "jre"
       }
     ],
     "win": {
