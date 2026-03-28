@@ -39,6 +39,10 @@ nb-configuration.xml
 # Local environment
 .env
 
+# Desktop app — build artifacts
+desktop/node_modules/
+desktop/dist/
+
 # Plugin directory
 /.quarkus/cli/plugins/
 # TLS Certificates

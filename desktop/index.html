@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline';" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anonimizador PDF</title>
+  <style>
+    /* ── Reset & base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0f172a;
+      --surface:   #1e293b;
+      --border:    #334155;
+      --primary:   #6366f1;
+      --primary-h: #818cf8;
+      --success:   #22c55e;
+      --danger:    #ef4444;
+      --warning:   #f59e0b;
+      --text:      #f1f5f9;
+      --muted:     #94a3b8;
+      --radius:    14px;
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+      -webkit-app-region: drag;
+    }
+
+    button, input, label { -webkit-app-region: no-drag; user-select: none; }
+
+    /* ── Header ───────────────────────────────────────────────── */
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px 24px 14px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(30,41,59,.6);
+      backdrop-filter: blur(8px);
+    }
+
+    header .logo {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--primary), #a78bfa);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 0 16px rgba(99,102,241,.4);
+    }
+
+    header h1 { font-size: 17px; font-weight: 700; letter-spacing: .3px; }
+    header p  { font-size: 12px; color: var(--muted); }
+
+    .header-info { margin-left: auto; }
+
+    /* ── Status badge ─────────────────────────────────────────── */
+    .status-badge {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--muted);
+    }
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--warning);
+      animation: pulse 1.4s infinite;
+    }
+    .status-dot.ready   { background: var(--success); animation: none; }
+    .status-dot.offline { background: var(--danger);  animation: none; }
+
+    @keyframes pulse {
+      0%,100% { opacity: 1; } 50% { opacity: .4; }
+    }
+
+    /* ── Main content ─────────────────────────────────────────── */
+    main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 28px 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+
+    /* ── Drop zone ────────────────────────────────────────────── */
+    #dropzone {
+      border: 2px dashed var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      padding: 48px 24px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color .2s, background .2s, box-shadow .2s;
+    }
+    #dropzone:hover,
+    #dropzone.drag-over {
+      border-color: var(--primary);
+      background: rgba(99,102,241,.08);
+      box-shadow: 0 0 0 4px rgba(99,102,241,.15);
+    }
+    #dropzone.has-file {
+      border-style: solid;
+      border-color: var(--primary);
+    }
+
+    .drop-icon { font-size: 48px; margin-bottom: 12px; }
+    .drop-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .drop-sub   { font-size: 13px; color: var(--muted); }
+
+    .file-info {
+      display: none;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 18px;
+      background: rgba(99,102,241,.12);
+      border-radius: 10px;
+      margin-top: 16px;
+      text-align: left;
+    }
+    .file-info.visible { display: flex; }
+    .file-icon { font-size: 28px; }
+    .file-name { font-size: 14px; font-weight: 600; word-break: break-all; }
+    .file-size { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .file-remove {
+      margin-left: auto;
+      background: none; border: none; color: var(--muted);
+      font-size: 18px; cursor: pointer; padding: 4px;
+      border-radius: 6px; transition: color .15s, background .15s;
+    }
+    .file-remove:hover { color: var(--danger); background: rgba(239,68,68,.12); }
+
+    /* ── Options card ─────────────────────────────────────────── */
+    .options-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 18px 22px;
+    }
+    .options-card h2 { font-size: 14px; font-weight: 600; margin-bottom: 14px; color: var(--muted); text-transform: uppercase; letter-spacing: .8px; }
+
+    .toggle-row {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 0;
+    }
+    .toggle-row + .toggle-row { border-top: 1px solid var(--border); }
+
+    .toggle-text { flex: 1; }
+    .toggle-text strong { display: block; font-size: 14px; margin-bottom: 2px; }
+    .toggle-text span   { font-size: 12px; color: var(--muted); }
+
+    /* toggle switch */
+    .toggle { position: relative; width: 44px; height: 24px; }
+    .toggle input { opacity: 0; width: 0; height: 0; }
+    .toggle-slider {
+      position: absolute; inset: 0;
+      background: var(--border);
+      border-radius: 24px;
+      cursor: pointer;
+      transition: background .2s;
+    }
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px; height: 18px;
+      left: 3px; top: 3px;
+      background: white;
+      border-radius: 50%;
+      transition: transform .2s;
+    }
+    .toggle input:checked ~ .toggle-slider { background: var(--primary); }
+    .toggle input:checked ~ .toggle-slider::before { transform: translateX(20px); }
+
+    /* ── Action button ────────────────────────────────────────── */
+    #btn-anonymize {
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(135deg, var(--primary), #7c3aed);
+      color: white;
+      border: none;
+      border-radius: var(--radius);
+      font-size: 15px; font-weight: 700;
+      cursor: pointer;
+      transition: opacity .2s, transform .1s, box-shadow .2s;
+      box-shadow: 0 4px 20px rgba(99,102,241,.35);
+    }
+    #btn-anonymize:hover:not(:disabled) {
+      opacity: .92;
+      box-shadow: 0 6px 28px rgba(99,102,241,.5);
+    }
+    #btn-anonymize:active:not(:disabled) { transform: scale(.985); }
+    #btn-anonymize:disabled { opacity: .45; cursor: not-allowed; }
+
+    /* ── Progress bar ─────────────────────────────────────────── */
+    #progress-wrap {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+    }
+    #progress-wrap.visible { display: flex; }
+
+    .progress-label {
+      display: flex; justify-content: space-between;
+      font-size: 13px; color: var(--muted);
+    }
+    .progress-bar-bg {
+      height: 6px;
+      background: var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), #a78bfa);
+      border-radius: 6px;
+      width: 0;
+      transition: width .4s ease;
+    }
+    .progress-bar-fill.indeterminate {
+      width: 40%;
+      animation: slide 1.2s infinite ease-in-out;
+    }
+    @keyframes slide {
+      0%   { margin-left: -40%; }
+      100% { margin-left: 100%; }
+    }
+
+    /* ── Result area ──────────────────────────────────────────── */
+    #result-area {
+      display: none;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 22px;
+      gap: 16px;
+      flex-direction: column;
+    }
+    #result-area.visible { display: flex; }
+
+    .result-header { display: flex; align-items: center; gap: 10px; }
+    .result-icon { font-size: 28px; }
+    .result-title { font-size: 15px; font-weight: 700; }
+    .result-sub   { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+    .result-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    .btn-secondary {
+      flex: 1;
+      padding: 11px 18px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      font-size: 13px; font-weight: 600;
+      cursor: pointer;
+      transition: background .15s, border-color .15s;
+    }
+    .btn-secondary:hover { background: var(--border); }
+
+    .btn-primary {
+      flex: 2;
+      padding: 11px 18px;
+      border-radius: 10px;
+      border: none;
+      background: var(--success);
+      color: white;
+      font-size: 13px; font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s, box-shadow .15s;
+      box-shadow: 0 3px 14px rgba(34,197,94,.3);
+    }
+    .btn-primary:hover { opacity: .9; }
+
+    /* ── Toast ────────────────────────────────────────────────── */
+    #toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 20px;
+      font-size: 13px; font-weight: 500;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      transition: transform .3s ease, opacity .3s;
+      opacity: 0;
+      white-space: nowrap;
+      z-index: 999;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    #toast.error { border-color: var(--danger); color: var(--danger); }
+    #toast.success { border-color: var(--success); color: var(--success); }
+
+    /* ── Footer ───────────────────────────────────────────────── */
+    footer {
+      padding: 10px 24px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--border);
+      border-top: 1px solid var(--border);
+    }
+
+    /* ── Scrollbar ────────────────────────────────────────────── */
+    ::-webkit-scrollbar { width: 6px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 6px; }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────────── -->
+  <header>
+    <div class="logo">🔏</div>
+    <div>
+      <h1>Anonimizador PDF</h1>
+      <p>Proteja dados sensíveis dos seus documentos</p>
+    </div>
+    <div class="header-info">
+      <div class="status-badge">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">Iniciando servidor…</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main ────────────────────────────────────────────────── -->
+  <main>
+
+    <!-- Drop zone -->
+    <div id="dropzone">
+      <div class="drop-icon">📄</div>
+      <p class="drop-title">Arraste um PDF aqui</p>
+      <p class="drop-sub">ou clique para selecionar o arquivo</p>
+
+      <div class="file-info" id="file-info">
+        <span class="file-icon">📋</span>
+        <div>
+          <div class="file-name" id="file-name"></div>
+          <div class="file-size" id="file-size"></div>
+        </div>
+        <button class="file-remove" id="btn-remove" title="Remover arquivo">✕</button>
+      </div>
+    </div>
+
+    <!-- Options -->
+    <div class="options-card">
+      <h2>⚙️ &nbsp;Opções</h2>
+      <div class="toggle-row">
+        <div class="toggle-text">
+          <strong>Modo seguro</strong>
+          <span>Garante que todos os dados sensíveis sejam removidos</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="safe-mode" checked />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- Progress -->
+    <div id="progress-wrap">
+      <div class="progress-label">
+        <span id="progress-label-text">Processando…</span>
+        <span id="progress-pct"></span>
+      </div>
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill indeterminate" id="progress-fill"></div>
+      </div>
+    </div>
+
+    <!-- Action -->
+    <button id="btn-anonymize" disabled>
+      <span>🔒</span> Anonimizar Documento
+    </button>
+
+    <!-- Result -->
+    <div id="result-area">
+      <div class="result-header">
+        <span class="result-icon">✅</span>
+        <div>
+          <div class="result-title">Documento anonimizado com sucesso!</div>
+          <div class="result-sub" id="result-sub">Pronto para download</div>
+        </div>
+      </div>
+      <div class="result-actions">
+        <button class="btn-secondary" id="btn-new">Novo documento</button>
+        <button class="btn-primary" id="btn-save">💾&nbsp; Salvar PDF</button>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- ── Footer ──────────────────────────────────────────────── -->
+  <footer>Todos os dados são processados localmente — nenhuma informação é enviada à internet.</footer>
+
+  <!-- ── Toast ───────────────────────────────────────────────── -->
+  <div id="toast"></div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
