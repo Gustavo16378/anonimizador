@@ -1,0 +1,76 @@
+name: Build & Release Windows App
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'maven'
+
+      - name: Build backend JAR
+        run: ./mvnw package -DskipTests "-Dquarkus.package.jar.type=uber-jar"
+        shell: bash
+
+      - name: Download JRE 21 (Windows x64)
+        shell: pwsh
+        run: |
+          $jreUrl = "https://api.adoptium.net/v3/binary/latest/21/ga/windows/x64/jre/hotspot/normal/eclipse"
+          Write-Host "Downloading JRE from $jreUrl ..."
+          Invoke-WebRequest -Uri $jreUrl -OutFile jre.zip
+          Write-Host "Extracting JRE..."
+          Expand-Archive -Path jre.zip -DestinationPath jre-extracted
+          $dirs = @(Get-ChildItem -Path jre-extracted -Directory)
+          if ($dirs.Count -ne 1) {
+            Write-Error "JRE extraction produced unexpected result: $($dirs.Count) directories found"
+            exit 1
+          }
+          Move-Item -Path $dirs[0].FullName -Destination desktop\jre
+          Write-Host "JRE ready at desktop\jre"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: desktop/package-lock.json
+
+      - name: Install Electron dependencies
+        run: npm ci
+        working-directory: desktop
+
+      - name: Build Windows installer
+        run: npm run dist:win
+        working-directory: desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AnonimizadorPDF-Windows
+          path: desktop/dist/*.exe
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: desktop/dist/*.exe
+          generate_release_notes: true

@@ -18,6 +18,15 @@ function getJarPath() {
   return path.join(__dirname, '..', 'target');
 }
 
+// ─── Executável Java (JRE embutido ou do PATH) ────────────────────────────────
+function getJavaExecutable() {
+  if (app.isPackaged) {
+    const exe = process.platform === 'win32' ? 'java.exe' : 'java';
+    return path.join(process.resourcesPath, 'jre', 'bin', exe);
+  }
+  return 'java';
+}
+
 function findJar(dir) {
   if (!fs.existsSync(dir)) return null;
   const files = fs.readdirSync(dir);
@@ -36,7 +45,7 @@ function startBackend() {
   }
 
   console.log('Iniciando backend:', jar);
-  backendProcess = spawn('java', ['-jar', jar], {
+  backendProcess = spawn(getJavaExecutable(), ['-jar', jar], {
     env: { ...process.env, QUARKUS_HTTP_PORT: String(BACKEND_PORT) },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
